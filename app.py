@@ -1,12 +1,22 @@
 import os
 from flask import Flask, request, render_template_string, redirect, url_for, session, flash
+from dotenv import load_dotenv
+
+load_dotenv()
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
+app.config.update(
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE='Lax',
+)
 
 # Load credentials from environment variables with demo defaults
 USERNAME = os.environ.get('LOGIN_USERNAME', 'admin')
 PASSWORD = os.environ.get('LOGIN_PASSWORD', 'demo123')
+HOST = os.environ.get('HOST', '127.0.0.1')
+PORT = int(os.environ.get('PORT', '5000'))
+DEBUG = os.environ.get('FLASK_DEBUG', 'true').lower() in {'1', 'true', 'yes', 'on'}
 
 HTML_TEMPLATE = '''
 <!DOCTYPE html>
@@ -23,6 +33,7 @@ HTML_TEMPLATE = '''
         button { width: 100%; padding: 10px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; }
         button:hover { background: #0056b3; }
         .error { color: red; text-align: center; margin: 10px 0; }
+        .hint { color: #666; text-align: center; font-size: 13px; margin-top: 10px; }
     </style>
 </head>
 <body>
@@ -34,10 +45,11 @@ HTML_TEMPLATE = '''
             {% endif %}
         {% endwith %}
         <form method="POST">
-            <input type="text" name="username" placeholder="Username" required>
+            <input type="text" name="username" placeholder="Username" required autofocus>
             <input type="password" name="password" placeholder="Password" required>
             <button type="submit">Login</button>
         </form>
+        <div class="hint">Configure credentials via environment variables or a local .env file.</div>
     </div>
 </body>
 </html>
@@ -68,23 +80,26 @@ PROTECTED_TEMPLATE = '''
 </html>
 '''
 
+
 @app.route('/', methods=['GET', 'POST'])
 def login():
     if session.get('logged_in'):
         return redirect(url_for('protected'))
-    
+
     if request.method == 'POST':
-        username = request.form.get('username')
-        password = request.form.get('password')
-        
+        username = request.form.get('username', '')
+        password = request.form.get('password', '')
+
         if username == USERNAME and password == PASSWORD:
+            session.clear()
             session['logged_in'] = True
             session['username'] = username
             return redirect(url_for('protected'))
-        else:
-            flash('Invalid username or password')
-    
+
+        flash('Invalid username or password')
+
     return render_template_string(HTML_TEMPLATE)
+
 
 @app.route('/protected')
 def protected():
@@ -92,14 +107,17 @@ def protected():
         return redirect(url_for('login'))
     return render_template_string(PROTECTED_TEMPLATE, username=session.get('username'))
 
+
 @app.route('/logout')
 def logout():
     session.clear()
     flash('You have been logged out')
     return redirect(url_for('login'))
 
+
 if __name__ == '__main__':
-    print(f"Starting login-web-demo")
-    print(f"Default credentials: username={USERNAME}, password={PASSWORD}")
-    print(f"Override with LOGIN_USERNAME and LOGIN_PASSWORD env vars")
-    app.run(host='127.0.0.1', port=5000, debug=True)
+    print('Starting login-web-demo')
+    print(f'Listening on http://{HOST}:{PORT}')
+    print(f'Default/demo credentials: username={USERNAME}, password={PASSWORD}')
+    print('Override with LOGIN_USERNAME, LOGIN_PASSWORD, SECRET_KEY, HOST, PORT, FLASK_DEBUG')
+    app.run(host=HOST, port=PORT, debug=DEBUG)
